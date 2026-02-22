@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+from importlib.metadata import version
 from typing import Optional
 
 import typer
 
 from plane_cli.config import load_config
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"plane-cli {version('plane-cli')}")
+        raise typer.Exit()
+
+
 from plane_cli.commands import config_cmd, issues, labels, pages, projects, states
 
 app = typer.Typer(
@@ -60,6 +69,14 @@ def main(
         False,
         "--pretty",
         help="Render Rich tables instead of JSON output",
+    ),
+    _version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        "-V",
+        help="Show version and exit.",
+        is_eager=True,
+        callback=_version_callback,
     ),
 ) -> None:
     """plane-cli: interact with Plane.so without leaving your terminal."""
