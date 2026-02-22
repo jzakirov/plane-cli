@@ -86,6 +86,7 @@ def config_init(ctx: typer.Context) -> None:
     console.print("\nValidating credentials…")
     try:
         from plane.client.plane_client import PlaneClient
+
         client = PlaneClient(base_url=base_url, api_key=api_key)
         response = client.projects.list(workspace_slug)
         projects = response.results or []

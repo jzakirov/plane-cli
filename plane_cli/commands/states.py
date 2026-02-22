@@ -80,14 +80,18 @@ def states_create(
     name: str = typer.Option(..., "--name", "-n", help="State name"),
     color: str = typer.Option(..., "--color", help="Hex color code, e.g. #ff5733"),
     project: Optional[str] = typer.Option(None, "--project", "-p", help="Project ID"),
-    group: Optional[str] = typer.Option(None, "--group", help=f"State group: {', '.join(_VALID_GROUPS)}"),
+    group: Optional[str] = typer.Option(
+        None, "--group", help=f"State group: {', '.join(_VALID_GROUPS)}"
+    ),
 ) -> None:
     """Create a new state."""
     cfg: Config = ctx.obj
     project_id = _resolve_project(cfg, project)
 
     if group is not None and group not in _VALID_GROUPS:
-        print_error("validation_error", f"Invalid group '{group}'. Choose from: {', '.join(_VALID_GROUPS)}")
+        print_error(
+            "validation_error", f"Invalid group '{group}'. Choose from: {', '.join(_VALID_GROUPS)}"
+        )
         raise typer.Exit(1)
 
     data_kwargs: dict = {"name": name, "color": color}
@@ -120,7 +124,10 @@ def states_update(
         data_kwargs["color"] = color
     if group is not None:
         if group not in _VALID_GROUPS:
-            print_error("validation_error", f"Invalid group '{group}'. Choose from: {', '.join(_VALID_GROUPS)}")
+            print_error(
+                "validation_error",
+                f"Invalid group '{group}'. Choose from: {', '.join(_VALID_GROUPS)}",
+            )
             raise typer.Exit(1)
         data_kwargs["group"] = group
 
@@ -130,6 +137,7 @@ def states_update(
 
     client = get_client(cfg)
     from plane.models.states import UpdateState
+
     data = UpdateState(**data_kwargs)
     state = call_with_retry(client.states.update, cfg.workspace_slug, project_id, state_id, data)
     print_json(_state_to_dict(state))

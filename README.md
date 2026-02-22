@@ -122,6 +122,17 @@ plane labels update <label-id>  [--project] [--name] [--color]
 plane labels delete <label-id>  [--project] [--yes]
 ```
 
+### `pages`
+
+```
+plane pages list    [--project]
+plane pages get     <page-id>   [--project]
+plane pages create  --name NAME [--project] [--description TEXT|-]
+plane pages update  <page-id>   [--project] [--name] [--description TEXT|-]
+plane pages delete  <page-id>   [--project] [--yes]
+plane pages delete  <page-id>   [--project] --archive [--yes]
+```
+
 ## Output
 
 By default all commands print JSON to stdout, making them easy to pipe into `jq` or feed to an LLM:

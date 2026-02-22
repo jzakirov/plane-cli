@@ -53,8 +53,12 @@ def issues_list(
     project: Optional[str] = typer.Option(None, "--project", "-p", help="Project ID"),
     state: Optional[str] = typer.Option(None, "--state", help="Filter by state ID"),
     priority: Optional[str] = typer.Option(None, "--priority", help="Filter by priority"),
-    label: Optional[List[str]] = typer.Option(None, "--label", help="Filter by label ID (repeatable)"),
-    assignee: Optional[List[str]] = typer.Option(None, "--assignee", help="Filter by assignee ID (repeatable)"),
+    label: Optional[List[str]] = typer.Option(
+        None, "--label", help="Filter by label ID (repeatable)"
+    ),
+    assignee: Optional[List[str]] = typer.Option(
+        None, "--assignee", help="Filter by assignee ID (repeatable)"
+    ),
     page: int = typer.Option(1, "--page", help="Page number"),
     per_page: Optional[int] = typer.Option(None, "--per-page", help="Results per page"),
     all_pages: bool = typer.Option(False, "--all", help="Fetch all pages (cap: 1000)"),
@@ -83,6 +87,7 @@ def issues_list(
 
             if len(all_issues) >= _MAX_ALL_PAGES:
                 from plane_cli.output import err_console
+
                 err_console.print(
                     f"[yellow]Warning: reached {_MAX_ALL_PAGES} issue limit; stopping pagination.[/yellow]"
                 )
@@ -109,9 +114,7 @@ def issues_list(
         if cursor_str:
             params.cursor = cursor_str
 
-        response = call_with_retry(
-            client.work_items.list, cfg.workspace_slug, project_id, params
-        )
+        response = call_with_retry(client.work_items.list, cfg.workspace_slug, project_id, params)
         issues = [_issue_to_dict(i) for i in (response.results or [])]
 
     if cfg.pretty:
@@ -132,9 +135,7 @@ def issues_get(
     project_id = _resolve_project(cfg, project)
     client = get_client(cfg)
 
-    issue = call_with_retry(
-        client.work_items.retrieve, cfg.workspace_slug, project_id, issue_id
-    )
+    issue = call_with_retry(client.work_items.retrieve, cfg.workspace_slug, project_id, issue_id)
     print_json(_issue_to_dict(issue))
 
 
@@ -151,7 +152,9 @@ def issues_create(
         None, "--priority", help=f"Priority: {', '.join(_VALID_PRIORITIES)}"
     ),
     label: Optional[List[str]] = typer.Option(None, "--label", help="Label ID (repeatable)"),
-    assignee: Optional[List[str]] = typer.Option(None, "--assignee", help="Assignee ID (repeatable)"),
+    assignee: Optional[List[str]] = typer.Option(
+        None, "--assignee", help="Assignee ID (repeatable)"
+    ),
     due_date: Optional[str] = typer.Option(None, "--due-date", help="Due date YYYY-MM-DD"),
 ) -> None:
     """Create a new issue."""
@@ -267,6 +270,7 @@ def issues_delete(
 # ---------------------------------------------------------------------------
 # comment sub-subcommand
 # ---------------------------------------------------------------------------
+
 
 @comment_app.command("list")
 def comment_list(

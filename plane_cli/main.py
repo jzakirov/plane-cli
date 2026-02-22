@@ -7,7 +7,7 @@ from typing import Optional
 import typer
 
 from plane_cli.config import load_config
-from plane_cli.commands import config_cmd, issues, labels, projects, states
+from plane_cli.commands import config_cmd, issues, labels, pages, projects, states
 
 app = typer.Typer(
     name="plane",
@@ -22,6 +22,7 @@ app.add_typer(projects.app, name="projects")
 app.add_typer(issues.app, name="issues")
 app.add_typer(states.app, name="states")
 app.add_typer(labels.app, name="labels")
+app.add_typer(pages.app, name="pages")
 
 
 @app.callback()

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -e
+
+staged_py=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+
+if [ -z "$staged_py" ]; then
+    exit 0
+fi
+
+if ! command -v ruff &>/dev/null; then
+    echo "ruff not found — run: pip install ruff" >&2
+    exit 1
+fi
+
+ruff format $staged_py
+git add $staged_py

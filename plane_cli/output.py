@@ -21,6 +21,7 @@ out_console = Console()
 # Core output primitives
 # ---------------------------------------------------------------------------
 
+
 def print_json(data: Any) -> None:
     """Print compact JSON to stdout."""
     print(json.dumps(data, default=_json_serial))
@@ -51,6 +52,7 @@ def _json_serial(obj: Any) -> Any:
 # ---------------------------------------------------------------------------
 # Text helpers
 # ---------------------------------------------------------------------------
+
 
 class _HTMLStripper(html.parser.HTMLParser):
     def __init__(self) -> None:
@@ -126,6 +128,7 @@ def relative_time(dt: Optional[datetime]) -> str:
     now = datetime.utcnow()
     if dt.tzinfo is not None:
         from datetime import timezone
+
         now = datetime.now(timezone.utc)
     diff = now - dt
     seconds = int(diff.total_seconds())
@@ -182,6 +185,7 @@ def _color_swatch(hex_color: Optional[str]) -> str:
 # Rich table builders
 # ---------------------------------------------------------------------------
 
+
 def build_projects_table(projects: list[dict]) -> Table:
     table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold")
     table.add_column("ID", style="dim", width=8)
@@ -196,7 +200,13 @@ def build_projects_table(projects: list[dict]) -> Table:
         identifier = p.get("identifier") or ""
         name = p.get("name") or ""
         network_val = p.get("network")
-        network = "public" if network_val == 2 else "secret" if network_val == 0 else str(network_val or "")
+        network = (
+            "public"
+            if network_val == 2
+            else "secret"
+            if network_val == 0
+            else str(network_val or "")
+        )
         members = str(p.get("total_members") or "")
         created = ""
         if p.get("created_at"):
@@ -323,7 +333,9 @@ def build_comments_table(comments: list[dict]) -> Table:
         else:
             author = str(actor)[:8]
 
-        body = truncate(strip_description(c.get("comment_html") or c.get("comment_stripped") or ""), 80)
+        body = truncate(
+            strip_description(c.get("comment_html") or c.get("comment_stripped") or ""), 80
+        )
 
         created = ""
         if c.get("created_at"):

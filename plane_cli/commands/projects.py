@@ -60,8 +60,12 @@ def projects_get(
 def projects_create(
     ctx: typer.Context,
     name: str = typer.Option(..., "--name", "-n", help="Project name"),
-    identifier: Optional[str] = typer.Option(None, "--identifier", help="Short identifier (e.g. PROJ)"),
-    description: Optional[str] = typer.Option(None, "--description", "-d", help="Description or '-' for stdin"),
+    identifier: Optional[str] = typer.Option(
+        None, "--identifier", help="Short identifier (e.g. PROJ)"
+    ),
+    description: Optional[str] = typer.Option(
+        None, "--description", "-d", help="Description or '-' for stdin"
+    ),
     network: Optional[str] = typer.Option(None, "--network", help="Network type: public or secret"),
 ) -> None:
     """Create a new project."""
@@ -80,7 +84,9 @@ def projects_create(
         elif network.lower() in ("secret", "private"):
             network_int = 0
         else:
-            print_error("validation_error", f"Invalid network value '{network}'. Use 'public' or 'secret'.")
+            print_error(
+                "validation_error", f"Invalid network value '{network}'. Use 'public' or 'secret'."
+            )
             raise typer.Exit(1)
 
     data_kwargs: dict = {"name": name}
@@ -101,7 +107,9 @@ def projects_update(
     ctx: typer.Context,
     project_id: str = typer.Argument(..., help="Project ID"),
     name: Optional[str] = typer.Option(None, "--name", "-n"),
-    description: Optional[str] = typer.Option(None, "--description", "-d", help="Description or '-' for stdin"),
+    description: Optional[str] = typer.Option(
+        None, "--description", "-d", help="Description or '-' for stdin"
+    ),
     network: Optional[str] = typer.Option(None, "--network", help="Network type: public or secret"),
 ) -> None:
     """Update a project."""
