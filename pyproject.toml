@@ -5,6 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "plane-cli"
 version = "0.2.4"
+description = "Plane.so CLI"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 readme = "README.md"
