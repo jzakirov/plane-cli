@@ -6,7 +6,7 @@ build-backend = "uv_build"
 name = "plane-cli"
 version = "0.2.4"
 description = "Plane.so CLI"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = { file = "LICENSE" }
 readme = "README.md"
 dependencies = [
@@ -26,7 +26,7 @@ module-root = ""
 dev = ["ruff>=0.9.0"]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py310"
 line-length = 100
 
 [tool.ruff.format]

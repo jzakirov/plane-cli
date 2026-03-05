@@ -16,13 +16,13 @@ plane issues comment add <id> --body -      # pipe a comment body from stdin
 ## Installation
 
 ```bash
-pip install plane-cli
+uv tool install plane-cli
 ```
 
-Or with uv:
+Or with pip:
 
 ```bash
-uv tool install plane-cli
+pip install plane-cli
 ```
 
 ## Configuration
@@ -87,7 +87,7 @@ plane projects delete <project-id> [--yes]
 ### `issues`
 
 ```
-plane issues list   [--project] [--state] [--priority] [--label] [--assignee]
+plane issues list   [--project] [--state] [--assignee]
                     [--page N] [--per-page N] [--all]
 plane issues get    <issue-id>  [--project]
 plane issues create --title TITLE [--project] [--description TEXT|-] [--state]

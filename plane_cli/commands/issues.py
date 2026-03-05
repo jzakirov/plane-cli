@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import sys
 from typing import List, Optional
 
@@ -9,11 +10,12 @@ import typer
 from plane.models.work_items import (
     CreateWorkItem,
     CreateWorkItemComment,
+    PaginatedWorkItemResponse,
     UpdateWorkItem,
 )
-from plane.models.query_params import WorkItemQueryParams
 
 from plane_cli.client import get_client, call_with_retry
+from plane_cli.commands import model_to_dict, resolve_project
 from plane_cli.config import Config
 from plane_cli.output import (
     build_comments_table,
@@ -32,19 +34,27 @@ _VALID_PRIORITIES = ("urgent", "high", "medium", "low", "none")
 _MAX_ALL_PAGES = 1000
 
 
-def _issue_to_dict(issue: object) -> dict:
-    return issue.model_dump() if hasattr(issue, "model_dump") else dict(issue)
+def _build_list_params(
+    per_page: int,
+    cursor: Optional[str] = None,
+    state: Optional[str] = None,
+    assignee: Optional[str] = None,
+) -> dict:
+    """Build query params dict for work items list, bypassing SDK model (extra=ignore)."""
+    params: dict = {"per_page": per_page}
+    if cursor:
+        params["cursor"] = cursor
+    if state:
+        params["state"] = state
+    if assignee:
+        params["assignee"] = assignee
+    return params
 
 
-def _resolve_project(cfg: Config, project_flag: Optional[str]) -> str:
-    project_id = project_flag or cfg.project
-    if not project_id:
-        print_error(
-            "config_error",
-            "No project specified. Use --project or set defaults.project in config.",
-        )
-        raise typer.Exit(1)
-    return project_id
+def _fetch_work_items(client: object, workspace: str, project_id: str, params: dict) -> object:
+    """Call work_items._get directly and validate response."""
+    raw = client.work_items._get(f"{workspace}/projects/{project_id}/work-items", params=params)
+    return PaginatedWorkItemResponse.model_validate(raw)
 
 
 @app.command("list")
@@ -52,20 +62,14 @@ def issues_list(
     ctx: typer.Context,
     project: Optional[str] = typer.Option(None, "--project", "-p", help="Project ID"),
     state: Optional[str] = typer.Option(None, "--state", help="Filter by state ID"),
-    priority: Optional[str] = typer.Option(None, "--priority", help="Filter by priority"),
-    label: Optional[List[str]] = typer.Option(
-        None, "--label", help="Filter by label ID (repeatable)"
-    ),
-    assignee: Optional[List[str]] = typer.Option(
-        None, "--assignee", help="Filter by assignee ID (repeatable)"
-    ),
+    assignee: Optional[str] = typer.Option(None, "--assignee", help="Filter by assignee ID"),
     page: int = typer.Option(1, "--page", help="Page number"),
     per_page: Optional[int] = typer.Option(None, "--per-page", help="Results per page"),
     all_pages: bool = typer.Option(False, "--all", help="Fetch all pages (cap: 1000)"),
 ) -> None:
     """List issues in a project."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     effective_per_page = per_page or cfg.per_page
@@ -75,14 +79,9 @@ def issues_list(
         cursor: Optional[str] = None
 
         while True:
-            params = WorkItemQueryParams(per_page=effective_per_page)
-            if cursor:
-                params.cursor = cursor
-
-            response = call_with_retry(
-                client.work_items.list, cfg.workspace_slug, project_id, params
-            )
-            batch = [_issue_to_dict(i) for i in (response.results or [])]
+            params = _build_list_params(effective_per_page, cursor, state, assignee)
+            response = _fetch_work_items(client, cfg.workspace_slug, project_id, params)
+            batch = [model_to_dict(i) for i in (response.results or [])]
             all_issues.extend(batch)
 
             if len(all_issues) >= _MAX_ALL_PAGES:
@@ -100,22 +99,14 @@ def issues_list(
 
         issues = all_issues
     else:
-        # Manual single-page fetch
-        # cursor-based: build cursor from page number
         cursor_str: Optional[str] = None
         if page > 1:
-            # Plane uses cursor format: "per_page:offset:0" style but the SDK
-            # exposes next_cursor strings from responses. For manual page navigation
-            # we use the offset pattern.
             offset = (page - 1) * effective_per_page
             cursor_str = f"{effective_per_page}:{offset}:0"
 
-        params = WorkItemQueryParams(per_page=effective_per_page)
-        if cursor_str:
-            params.cursor = cursor_str
-
-        response = call_with_retry(client.work_items.list, cfg.workspace_slug, project_id, params)
-        issues = [_issue_to_dict(i) for i in (response.results or [])]
+        params = _build_list_params(effective_per_page, cursor_str, state, assignee)
+        response = _fetch_work_items(client, cfg.workspace_slug, project_id, params)
+        issues = [model_to_dict(i) for i in (response.results or [])]
 
     if cfg.pretty:
         table = build_issues_table(issues)
@@ -132,11 +123,11 @@ def issues_get(
 ) -> None:
     """Get a single issue by ID."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     issue = call_with_retry(client.work_items.retrieve, cfg.workspace_slug, project_id, issue_id)
-    print_json(_issue_to_dict(issue))
+    print_json(model_to_dict(issue))
 
 
 @app.command("create")
@@ -159,7 +150,7 @@ def issues_create(
 ) -> None:
     """Create a new issue."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     if priority is not None and priority not in _VALID_PRIORITIES:
         print_error(
@@ -172,7 +163,7 @@ def issues_create(
 
     if description is not None:
         desc_text = read_text_arg(description)
-        data_kwargs["description_html"] = f"<p>{desc_text}</p>"
+        data_kwargs["description_html"] = f"<p>{html.escape(desc_text)}</p>"
         data_kwargs["description_stripped"] = desc_text
 
     if state is not None:
@@ -189,7 +180,7 @@ def issues_create(
     client = get_client(cfg)
     data = CreateWorkItem(**data_kwargs)
     issue = call_with_retry(client.work_items.create, cfg.workspace_slug, project_id, data)
-    print_json(_issue_to_dict(issue))
+    print_json(model_to_dict(issue))
 
 
 @app.command("update")
@@ -208,7 +199,7 @@ def issues_update(
 ) -> None:
     """Update an issue."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     data_kwargs: dict = {}
 
@@ -216,7 +207,7 @@ def issues_update(
         data_kwargs["name"] = title
     if description is not None:
         desc_text = read_text_arg(description)
-        data_kwargs["description_html"] = f"<p>{desc_text}</p>"
+        data_kwargs["description_html"] = f"<p>{html.escape(desc_text)}</p>"
         data_kwargs["description_stripped"] = desc_text
     if state is not None:
         data_kwargs["state"] = state
@@ -242,7 +233,7 @@ def issues_update(
     issue = call_with_retry(
         client.work_items.update, cfg.workspace_slug, project_id, issue_id, data
     )
-    print_json(_issue_to_dict(issue))
+    print_json(model_to_dict(issue))
 
 
 @app.command("delete")
@@ -254,7 +245,7 @@ def issues_delete(
 ) -> None:
     """Delete an issue."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     if not yes and not sys.stdin.isatty():
         print_error("validation_error", "Pass --yes for non-interactive deletion.")
@@ -280,13 +271,13 @@ def comment_list(
 ) -> None:
     """List comments on an issue."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     response = call_with_retry(
         client.work_items.comments.list, cfg.workspace_slug, project_id, issue_id
     )
-    comments = [_issue_to_dict(c) for c in (response.results or [])]
+    comments = [model_to_dict(c) for c in (response.results or [])]
 
     if cfg.pretty:
         table = build_comments_table(comments)
@@ -304,10 +295,10 @@ def comment_add(
 ) -> None:
     """Add a comment to an issue."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     body_text = read_text_arg(body)
-    comment_html = f"<p>{body_text}</p>"
+    comment_html = f"<p>{html.escape(body_text)}</p>"
 
     client = get_client(cfg)
     data = CreateWorkItemComment(comment_html=comment_html)
@@ -318,4 +309,4 @@ def comment_add(
         issue_id,
         data,
     )
-    print_json(_issue_to_dict(comment))
+    print_json(model_to_dict(comment))

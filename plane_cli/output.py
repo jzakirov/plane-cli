@@ -125,11 +125,11 @@ def relative_time(dt: Optional[datetime]) -> str:
     """Return a human-friendly relative timestamp."""
     if dt is None:
         return ""
-    now = datetime.utcnow()
-    if dt.tzinfo is not None:
-        from datetime import timezone
+    from datetime import timezone
 
-        now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
     diff = now - dt
     seconds = int(diff.total_seconds())
     if seconds < 60:

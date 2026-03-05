@@ -50,8 +50,13 @@ def load_config(
                 cfg.project = str(defaults["project"])
             if defaults.get("per_page"):
                 cfg.per_page = int(defaults["per_page"])
-        except Exception:
-            pass  # Corrupt config file — silently ignore, use defaults
+        except (tomlkit.exceptions.TOMLKitError, ValueError, KeyError):
+            import sys
+
+            print(
+                f"Warning: could not parse {CONFIG_PATH}, using defaults.",
+                file=sys.stderr,
+            )
 
     # 2. Override with environment variables
     if os.environ.get("PLANE_API_KEY"):

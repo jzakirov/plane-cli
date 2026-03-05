@@ -9,6 +9,7 @@ import typer
 from plane.models.labels import CreateLabel, UpdateLabel
 
 from plane_cli.client import get_client, call_with_retry
+from plane_cli.commands import model_to_dict, resolve_project
 from plane_cli.config import Config
 from plane_cli.output import (
     print_json,
@@ -20,21 +21,6 @@ from plane_cli.output import (
 app = typer.Typer(name="labels", help="Manage work item labels.", no_args_is_help=True)
 
 
-def _label_to_dict(lb: object) -> dict:
-    return lb.model_dump() if hasattr(lb, "model_dump") else dict(lb)
-
-
-def _resolve_project(cfg: Config, project_flag: Optional[str]) -> str:
-    project_id = project_flag or cfg.project
-    if not project_id:
-        print_error(
-            "config_error",
-            "No project specified. Use --project or set defaults.project in config.",
-        )
-        raise typer.Exit(1)
-    return project_id
-
-
 @app.command("list")
 def labels_list(
     ctx: typer.Context,
@@ -42,11 +28,11 @@ def labels_list(
 ) -> None:
     """List all labels in a project."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     response = call_with_retry(client.labels.list, cfg.workspace_slug, project_id)
-    labels = [_label_to_dict(lb) for lb in (response.results or [])]
+    labels = [model_to_dict(lb) for lb in (response.results or [])]
 
     if cfg.pretty:
         table = build_labels_table(labels)
@@ -63,11 +49,11 @@ def labels_get(
 ) -> None:
     """Get a single label by ID."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     label = call_with_retry(client.labels.retrieve, cfg.workspace_slug, project_id, label_id)
-    print_json(_label_to_dict(label))
+    print_json(model_to_dict(label))
 
 
 @app.command("create")
@@ -79,7 +65,7 @@ def labels_create(
 ) -> None:
     """Create a new label."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     data_kwargs: dict = {"name": name}
     if color is not None:
@@ -88,7 +74,7 @@ def labels_create(
     client = get_client(cfg)
     data = CreateLabel(**data_kwargs)
     label = call_with_retry(client.labels.create, cfg.workspace_slug, project_id, data)
-    print_json(_label_to_dict(label))
+    print_json(model_to_dict(label))
 
 
 @app.command("update")
@@ -101,7 +87,7 @@ def labels_update(
 ) -> None:
     """Update a label."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     data_kwargs: dict = {}
     if name is not None:
@@ -116,7 +102,7 @@ def labels_update(
     client = get_client(cfg)
     data = UpdateLabel(**data_kwargs)
     label = call_with_retry(client.labels.update, cfg.workspace_slug, project_id, label_id, data)
-    print_json(_label_to_dict(label))
+    print_json(model_to_dict(label))
 
 
 @app.command("delete")
@@ -128,7 +114,7 @@ def labels_delete(
 ) -> None:
     """Delete a label."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     if not yes and not sys.stdin.isatty():
         print_error("validation_error", "Pass --yes for non-interactive deletion.")

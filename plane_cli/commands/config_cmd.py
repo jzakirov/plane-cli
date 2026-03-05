@@ -13,15 +13,13 @@ from plane_cli.config import (
     Config,
     CONFIG_PATH,
     config_as_dict,
-    load_config,
     save_config,
     save_config_key,
 )
-from plane_cli.output import print_json, print_error, out_console
+from plane_cli.output import print_json, print_error
 
 app = typer.Typer(name="config", help="Manage plane-cli configuration.", no_args_is_help=True)
 console = Console()
-err_console = Console(stderr=True)
 
 
 @app.command("show")
@@ -111,11 +109,7 @@ def config_init(ctx: typer.Context) -> None:
                 default_project = projects[idx].id
                 console.print(f"[green]✓[/green] Default project: {projects[idx].name}")
 
-    # Build and save config
-    new_cfg = load_config()
-    new_cfg.api_key = api_key
-    new_cfg.workspace_slug = workspace_slug
-    new_cfg.base_url = base_url
+    new_cfg = Config(api_key=api_key, workspace_slug=workspace_slug, base_url=base_url)
     if default_project:
         new_cfg.project = default_project
 

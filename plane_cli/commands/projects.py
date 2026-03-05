@@ -6,10 +6,10 @@ import sys
 from typing import Optional
 
 import typer
-from rich.console import Console
 from plane.models.projects import CreateProject, UpdateProject
 
 from plane_cli.client import get_client, call_with_retry
+from plane_cli.commands import model_to_dict
 from plane_cli.config import Config
 from plane_cli.output import (
     print_json,
@@ -20,11 +20,6 @@ from plane_cli.output import (
 )
 
 app = typer.Typer(name="projects", help="Manage Plane projects.", no_args_is_help=True)
-console = Console()
-
-
-def _project_to_dict(p: object) -> dict:
-    return p.model_dump() if hasattr(p, "model_dump") else dict(p)
 
 
 @app.command("list")
@@ -34,7 +29,7 @@ def projects_list(ctx: typer.Context) -> None:
     client = get_client(cfg)
 
     response = call_with_retry(client.projects.list, cfg.workspace_slug)
-    projects = [_project_to_dict(p) for p in (response.results or [])]
+    projects = [model_to_dict(p) for p in (response.results or [])]
 
     if cfg.pretty:
         table = build_projects_table(projects)
@@ -53,7 +48,7 @@ def projects_get(
     client = get_client(cfg)
 
     project = call_with_retry(client.projects.retrieve, cfg.workspace_slug, project_id)
-    print_json(_project_to_dict(project))
+    print_json(model_to_dict(project))
 
 
 @app.command("create")
@@ -99,7 +94,7 @@ def projects_create(
 
     data = CreateProject(**data_kwargs)
     project = call_with_retry(client.projects.create, cfg.workspace_slug, data)
-    print_json(_project_to_dict(project))
+    print_json(model_to_dict(project))
 
 
 @app.command("update")
@@ -136,7 +131,7 @@ def projects_update(
 
     data = UpdateProject(**data_kwargs)
     project = call_with_retry(client.projects.update, cfg.workspace_slug, project_id, data)
-    print_json(_project_to_dict(project))
+    print_json(model_to_dict(project))
 
 
 @app.command("delete")

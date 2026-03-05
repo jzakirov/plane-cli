@@ -6,10 +6,10 @@ import sys
 from typing import Optional
 
 import typer
-from rich.console import Console
 from plane.models.states import CreateState, UpdateState
 
 from plane_cli.client import get_client, call_with_retry
+from plane_cli.commands import model_to_dict, resolve_project
 from plane_cli.config import Config
 from plane_cli.output import (
     print_json,
@@ -19,24 +19,8 @@ from plane_cli.output import (
 )
 
 app = typer.Typer(name="states", help="Manage work item states.", no_args_is_help=True)
-console = Console()
 
 _VALID_GROUPS = ("backlog", "unstarted", "started", "completed", "cancelled")
-
-
-def _state_to_dict(s: object) -> dict:
-    return s.model_dump() if hasattr(s, "model_dump") else dict(s)
-
-
-def _resolve_project(cfg: Config, project_flag: Optional[str]) -> str:
-    project_id = project_flag or cfg.project
-    if not project_id:
-        print_error(
-            "config_error",
-            "No project specified. Use --project or set defaults.project in config.",
-        )
-        raise typer.Exit(1)
-    return project_id
 
 
 @app.command("list")
@@ -46,11 +30,11 @@ def states_list(
 ) -> None:
     """List all states in a project."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     response = call_with_retry(client.states.list, cfg.workspace_slug, project_id)
-    states = [_state_to_dict(s) for s in (response.results or [])]
+    states = [model_to_dict(s) for s in (response.results or [])]
 
     if cfg.pretty:
         table = build_states_table(states)
@@ -67,11 +51,11 @@ def states_get(
 ) -> None:
     """Get a single state by ID."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     state = call_with_retry(client.states.retrieve, cfg.workspace_slug, project_id, state_id)
-    print_json(_state_to_dict(state))
+    print_json(model_to_dict(state))
 
 
 @app.command("create")
@@ -86,7 +70,7 @@ def states_create(
 ) -> None:
     """Create a new state."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     if group is not None and group not in _VALID_GROUPS:
         print_error(
@@ -101,7 +85,7 @@ def states_create(
     client = get_client(cfg)
     data = CreateState(**data_kwargs)
     state = call_with_retry(client.states.create, cfg.workspace_slug, project_id, data)
-    print_json(_state_to_dict(state))
+    print_json(model_to_dict(state))
 
 
 @app.command("update")
@@ -115,7 +99,7 @@ def states_update(
 ) -> None:
     """Update a state."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     data_kwargs: dict = {}
     if name is not None:
@@ -136,11 +120,9 @@ def states_update(
         raise typer.Exit(1)
 
     client = get_client(cfg)
-    from plane.models.states import UpdateState
-
     data = UpdateState(**data_kwargs)
     state = call_with_retry(client.states.update, cfg.workspace_slug, project_id, state_id, data)
-    print_json(_state_to_dict(state))
+    print_json(model_to_dict(state))
 
 
 @app.command("delete")
@@ -152,7 +134,7 @@ def states_delete(
 ) -> None:
     """Delete a state."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     if not yes and not sys.stdin.isatty():
         print_error("validation_error", "Pass --yes for non-interactive deletion.")

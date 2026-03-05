@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import sys
 from datetime import datetime, timezone
 from typing import Optional
@@ -11,21 +12,11 @@ from plane.errors.errors import HttpError
 from plane.models.pages import CreatePage
 
 from plane_cli.client import call_with_retry, get_client
+from plane_cli.commands import model_to_dict, resolve_project
 from plane_cli.config import Config
 from plane_cli.output import print_error, print_json, read_text_arg
 
 app = typer.Typer(name="pages", help="Manage project pages.", no_args_is_help=True)
-
-
-def _resolve_project(cfg: Config, project_flag: Optional[str]) -> str:
-    project_id = project_flag or cfg.project
-    if not project_id:
-        print_error(
-            "config_error",
-            "No project specified. Use --project or set defaults.project in config.",
-        )
-        raise typer.Exit(1)
-    return project_id
 
 
 def _not_supported(op: str, status_code: int = 405) -> None:
@@ -43,7 +34,7 @@ def pages_list(
 ) -> None:
     """List pages in a project (if API supports listing)."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     try:
@@ -73,7 +64,7 @@ def pages_get(
 ) -> None:
     """Get a single page by ID."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     page = call_with_retry(
@@ -82,7 +73,7 @@ def pages_get(
         project_id,
         page_id,
     )
-    print_json(page.model_dump() if hasattr(page, "model_dump") else dict(page))
+    print_json(model_to_dict(page))
 
 
 @app.command("create")
@@ -96,18 +87,18 @@ def pages_create(
 ) -> None:
     """Create a page in a project."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     desc_text = "" if description is None else read_text_arg(description)
-    data = CreatePage(name=name, description_html=f"<p>{desc_text}</p>")
+    data = CreatePage(name=name, description_html=f"<p>{html.escape(desc_text)}</p>")
     page = call_with_retry(
         client.pages.create_project_page,
         cfg.workspace_slug,
         project_id,
         data,
     )
-    print_json(page.model_dump() if hasattr(page, "model_dump") else dict(page))
+    print_json(model_to_dict(page))
 
 
 @app.command("update")
@@ -122,14 +113,14 @@ def pages_update(
 ) -> None:
     """Update a project page (if API supports updates)."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
     client = get_client(cfg)
 
     data: dict = {}
     if name is not None:
         data["name"] = name
     if description is not None:
-        data["description_html"] = f"<p>{read_text_arg(description)}</p>"
+        data["description_html"] = f"<p>{html.escape(read_text_arg(description))}</p>"
     if not data:
         print_error("validation_error", "No fields to update. Provide --name and/or --description.")
         raise typer.Exit(1)
@@ -159,7 +150,7 @@ def pages_delete(
 ) -> None:
     """Delete or archive a page (if API supports it)."""
     cfg: Config = ctx.obj
-    project_id = _resolve_project(cfg, project)
+    project_id = resolve_project(cfg, project)
 
     if not yes and not sys.stdin.isatty():
         print_error("validation_error", "Pass --yes for non-interactive deletion/archive.")
