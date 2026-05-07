@@ -170,6 +170,20 @@ def _state_group_style(group: Optional[str]) -> str:
     return styles.get((group or "").lower(), "")
 
 
+def _member_display(value: Any) -> str:
+    """Format an assignee dict as a short display name; fall back to a short ID."""
+    if isinstance(value, dict):
+        return value.get("display_name") or value.get("email") or str(value.get("id", ""))[:8]
+    return str(value)[:8]
+
+
+def _label_display(value: Any) -> str:
+    """Format a label dict as its name; fall back to a short ID."""
+    if isinstance(value, dict):
+        return value.get("name") or str(value.get("id", ""))[:8]
+    return str(value)[:8]
+
+
 def _color_swatch(hex_color: Optional[str]) -> str:
     """Return a Rich markup string with a colored square."""
     if not hex_color:
@@ -221,6 +235,8 @@ def build_projects_table(projects: list[dict]) -> Table:
 
 
 def build_issues_table(issues: list[dict]) -> Table:
+    """Build issues table. Expects state/labels/assignees to be expanded dicts
+    (the caller passes `expand=state,labels,assignees` to the work-items API)."""
     table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold")
     table.add_column("#", style="dim", width=6)
     table.add_column("Title", width=50)
@@ -236,10 +252,15 @@ def build_issues_table(issues: list[dict]) -> Table:
         seq = f"#{issue.get('sequence_id', '')}"
         title = truncate(issue.get("name") or "", 50)
 
-        # State
+        # State, label, and assignee items are dicts when the caller used
+        # `expand=...`; we keep a fallback for raw UUID strings just in case.
         state = issue.get("state") or {}
-        state_name = state.get("name") or "" if isinstance(state, dict) else str(state)
-        state_group = state.get("group") or "" if isinstance(state, dict) else ""
+        if isinstance(state, dict):
+            state_name = state.get("name") or ""
+            state_group = state.get("group") or ""
+        else:
+            state_name = str(state)[:8]
+            state_group = ""
         state_style = _state_group_style(state_group)
         state_cell = f"[{state_style}]{state_name}[/]" if state_style else state_name
 
@@ -249,21 +270,10 @@ def build_issues_table(issues: list[dict]) -> Table:
         priority_cell = f"[{pstyle}]{priority}[/]" if pstyle else priority
 
         # Assignees
-        assignees_raw = issue.get("assignees") or []
-        if assignees_raw and isinstance(assignees_raw[0], dict):
-            assignees = ", ".join(
-                a.get("display_name") or a.get("email") or str(a.get("id", ""))[:6]
-                for a in assignees_raw
-            )
-        else:
-            assignees = ", ".join(str(a)[:8] for a in assignees_raw)
+        assignees = ", ".join(_member_display(a) for a in (issue.get("assignees") or []))
 
         # Labels
-        labels_raw = issue.get("labels") or []
-        if labels_raw and isinstance(labels_raw[0], dict):
-            labels = ", ".join(lb.get("name") or str(lb.get("id", ""))[:6] for lb in labels_raw)
-        else:
-            labels = ", ".join(str(lb)[:8] for lb in labels_raw)
+        labels = ", ".join(_label_display(lb) for lb in (issue.get("labels") or []))
 
         # Due date
         due_raw = issue.get("target_date")

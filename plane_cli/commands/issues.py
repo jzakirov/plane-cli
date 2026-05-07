@@ -39,6 +39,7 @@ def _build_list_params(
     cursor: Optional[str] = None,
     state: Optional[str] = None,
     assignee: Optional[str] = None,
+    expand: Optional[str] = None,
 ) -> dict:
     """Build query params dict for work items list, bypassing SDK model (extra=ignore)."""
     params: dict = {"per_page": per_page}
@@ -48,6 +49,8 @@ def _build_list_params(
         params["state"] = state
     if assignee:
         params["assignee"] = assignee
+    if expand:
+        params["expand"] = expand
     return params
 
 
@@ -79,7 +82,13 @@ def issues_list(
         cursor: Optional[str] = None
 
         while True:
-            params = _build_list_params(effective_per_page, cursor, state, assignee)
+            params = _build_list_params(
+                effective_per_page,
+                cursor,
+                state,
+                assignee,
+                expand="state,labels,assignees" if cfg.pretty else None,
+            )
             response = _fetch_work_items(client, cfg.workspace_slug, project_id, params)
             batch = [model_to_dict(i) for i in (response.results or [])]
             all_issues.extend(batch)
@@ -104,7 +113,13 @@ def issues_list(
             offset = (page - 1) * effective_per_page
             cursor_str = f"{effective_per_page}:{offset}:0"
 
-        params = _build_list_params(effective_per_page, cursor_str, state, assignee)
+        params = _build_list_params(
+            effective_per_page,
+            cursor_str,
+            state,
+            assignee,
+            expand="state,labels,assignees" if cfg.pretty else None,
+        )
         response = _fetch_work_items(client, cfg.workspace_slug, project_id, params)
         issues = [model_to_dict(i) for i in (response.results or [])]
 
