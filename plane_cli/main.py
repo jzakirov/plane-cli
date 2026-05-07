@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from importlib.metadata import version
 from typing import Optional
 
@@ -57,10 +58,11 @@ def main(
         "--project",
         help="Default project ID [env: PLANE_PROJECT]",
     ),
-    pretty: bool = typer.Option(
-        False,
-        "--pretty",
-        help="Render Rich tables instead of JSON output",
+    pretty: Optional[bool] = typer.Option(
+        None,
+        "--pretty/--no-pretty",
+        help="Render Rich tables instead of JSON output. "
+        "Defaults to pretty when stdout is a TTY, JSON when piped or redirected.",
     ),
     _version: Optional[bool] = typer.Option(
         None,
@@ -79,5 +81,5 @@ def main(
         base_url_flag=base_url,
         project_flag=project,
     )
-    cfg.pretty = pretty
+    cfg.pretty = pretty if pretty is not None else sys.stdout.isatty()
     ctx.obj = cfg
