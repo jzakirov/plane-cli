@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 import sys
 from typing import List, Optional
 
@@ -34,11 +35,19 @@ _VALID_PRIORITIES = ("urgent", "high", "medium", "low", "none")
 _MAX_ALL_PAGES = 1000
 
 
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+
 def _build_list_params(
     per_page: int,
     cursor: Optional[str] = None,
     state: Optional[str] = None,
     assignee: Optional[str] = None,
+    expand: Optional[str] = None,
+    pql: Optional[str] = None,
 ) -> dict:
     """Build query params dict for work items list, bypassing SDK model (extra=ignore)."""
     params: dict = {"per_page": per_page}
@@ -48,7 +57,59 @@ def _build_list_params(
         params["state"] = state
     if assignee:
         params["assignee"] = assignee
+    if expand:
+        params["expand"] = expand
+    if pql:
+        params["pql"] = pql
     return params
+
+
+def _matches_labels(issue: dict, wanted: set[str]) -> bool:
+    """Return True if any of the issue's labels matches one of `wanted` by name or ID."""
+    for lb in issue.get("labels") or []:
+        if isinstance(lb, dict):
+            if lb.get("name") in wanted or lb.get("id") in wanted:
+                return True
+        elif str(lb) in wanted:
+            return True
+    return False
+
+
+def _resolve_label_uuids(
+    client: object, workspace: str, project_id: str, requested: set[str]
+) -> Optional[set[str]]:
+    """Resolve label names or UUIDs to UUIDs.
+
+    Returns the set of UUIDs if every requested entry resolved, or None if
+    one or more names could not be resolved (e.g. the labels endpoint is
+    not available on this project for this API key — a known Plane quirk
+    for projects the user can read but isn't a direct member of).
+
+    A None return tells the caller to fall back to client-side filtering.
+    """
+    uuids = {x for x in requested if _UUID_RE.match(x)}
+    names = requested - uuids
+    if not names:
+        return uuids
+
+    try:
+        response = call_with_retry(client.labels.list, workspace, project_id)
+        name_to_id = {lb.name: lb.id for lb in (response.results or []) if lb.id and lb.name}
+    except Exception:
+        return None
+
+    for n in names:
+        lid = name_to_id.get(n)
+        if not lid:
+            return None
+        uuids.add(lid)
+    return uuids
+
+
+def _build_label_pql(uuids: set[str]) -> str:
+    """Build a PQL clause that matches issues with any of the given label UUIDs."""
+    quoted = ", ".join(f'"{u}"' for u in sorted(uuids))
+    return f"label IN ({quoted})"
 
 
 def _fetch_work_items(client: object, workspace: str, project_id: str, params: dict) -> object:
@@ -63,6 +124,12 @@ def issues_list(
     project: Optional[str] = typer.Option(None, "--project", "-p", help="Project ID"),
     state: Optional[str] = typer.Option(None, "--state", help="Filter by state ID"),
     assignee: Optional[str] = typer.Option(None, "--assignee", help="Filter by assignee ID"),
+    label: Optional[List[str]] = typer.Option(
+        None,
+        "--label",
+        "-l",
+        help="Filter by label name or ID. Repeatable; matches issues that have ANY of the given labels.",
+    ),
     page: int = typer.Option(1, "--page", help="Page number"),
     per_page: Optional[int] = typer.Option(None, "--per-page", help="Results per page"),
     all_pages: bool = typer.Option(False, "--all", help="Fetch all pages (cap: 1000)"),
@@ -74,12 +141,32 @@ def issues_list(
 
     effective_per_page = per_page or cfg.per_page
 
+    # Plane's REST API uses a PQL (Plane Query Language) expression for filtering,
+    # passed as `?pql=...`. PQL only matches by UUID, so for `--label foo` we have
+    # to resolve names to UUIDs first. If that resolution fails (typically because
+    # the project labels endpoint isn't readable with this API key), we fall back
+    # to fetching everything and filtering client-side against expanded labels.
+    label_filter = set(label) if label else None
+    pql: Optional[str] = None
+    needs_client_filter = False
+    expand: Optional[str] = None
+
+    if label_filter:
+        resolved = _resolve_label_uuids(client, cfg.workspace_slug, project_id, label_filter)
+        if resolved is not None:
+            pql = _build_label_pql(resolved)
+        else:
+            needs_client_filter = True
+            expand = "labels"
+
     if all_pages:
         all_issues: list[dict] = []
         cursor: Optional[str] = None
 
         while True:
-            params = _build_list_params(effective_per_page, cursor, state, assignee)
+            params = _build_list_params(
+                effective_per_page, cursor, state, assignee, expand=expand, pql=pql
+            )
             response = _fetch_work_items(client, cfg.workspace_slug, project_id, params)
             batch = [model_to_dict(i) for i in (response.results or [])]
             all_issues.extend(batch)
@@ -104,9 +191,14 @@ def issues_list(
             offset = (page - 1) * effective_per_page
             cursor_str = f"{effective_per_page}:{offset}:0"
 
-        params = _build_list_params(effective_per_page, cursor_str, state, assignee)
+        params = _build_list_params(
+            effective_per_page, cursor_str, state, assignee, expand=expand, pql=pql
+        )
         response = _fetch_work_items(client, cfg.workspace_slug, project_id, params)
         issues = [model_to_dict(i) for i in (response.results or [])]
+
+    if needs_client_filter and label_filter:
+        issues = [i for i in issues if _matches_labels(i, label_filter)]
 
     if cfg.pretty:
         table = build_issues_table(issues)
